@@ -1,7 +1,7 @@
 ---
 title: "Practical Machine Learning Course Project"
 author: "Ivan Madarov"
-date: '29 януари 2017 г '
+date: '11 February 2017'
 output: html_document
 ---
 
@@ -9,19 +9,73 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## Data Loading and Exploratory analysis
+## Data Loading, Preprocessing and Exploratory analysis
 
+### Data Loading
+The datasets have been downloaded to local machine. The datasets are loaded from the working directory.
 
-```{r cars}
-summary(cars)
+```{r dataload}
+library(caret)
+library(randomForest)
+pml_training <- read.csv("pml-training.csv",row.names=1,na.strings=c("NA","#DIV/0!"))
+pml_testing <- read.csv("pml-testing.csv",row.names=1,na.strings=c("NA","#DIV/0!"))
 ```
 
-## Including Plots
+### Data Preprocessing and exploring
+```{r preprocessing}
+dim(pml_training)
+dim(pml_testing)
+table(pml_training$classe)
+```
+Both datasets have 159 variables. Let's first remove Near Zero Variance (NZV) variables.
+```{r remove_NZV}
+NZV <- nearZeroVar(pml_training)
+pml_training <- pml_training[, -NZV]
+pml_testing <- pml_testing[, -NZV]
+dim(pml_training)
+dim(pml_testing)
+```
+There are also variables that are mostly NA. Let's remove them as well.
+```{r remove_NA}
+NA_vars <- sapply(pml_training, function(x) mean(is.na(x))) > 0.95
+pml_training <- pml_training[, NA_vars==FALSE]
+pml_testing <- pml_testing[, NA_vars==FALSE]
+dim(pml_training)
+dim(pml_testing)
+```
+We can remove also the first 4 columns that contain user_name and timestamps.
+```{r remove_timestamps}
+pml_training <- pml_training[, -(1:4)]
+pml_testing <- pml_testing[, -(1:4)]
+dim(pml_training)
+dim(pml_testing)
+```
+After the preprocessing, the number of variables for the analysis has been reduced to 54.
 
-You can also embed plots, for example:
+## Model building and test
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+Random Forest is usually one of the top performing algorithms so let's try it.
+
+Partitioning the training data set to allow cross-validation
+```{r model_building}
+set.seed(1234)
+inTrain = createDataPartition(pml_training$classe, p=0.7, list=FALSE)
+training = pml_training[inTrain,]
+validating = pml_training[-inTrain,]
+model <- randomForest(classe~.,data=training)
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+Let's evaluate the model with validating dataset through confusionMatrix.
+```{r model_eval}
+confusionMatrix(predict(model,newdata=validating),validating$classe)
+```
+
+The accuracy of the model is 0.9976. The expected out-of-sample error is estimated at 0.002, or 0.2%.
+
+Let's predict 20 quiz results with the testing dataset.
+```{r model_test}
+predictions <- predict(model,newdata=pml_testing)
+print(predictions)
+```
+All 20 predicted test cases of the quiz were correct.
+
